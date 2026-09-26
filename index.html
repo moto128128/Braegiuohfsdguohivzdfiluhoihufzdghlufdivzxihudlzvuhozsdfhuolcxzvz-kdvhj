@@ -26,6 +26,24 @@
     .slide { transform: translateX(300px); }
     #pour { background: #ef4444; color: #fff; width: 80px; height: 80px; border-radius: 50%; margin: auto; display: block; }
 
+    /* Pretend food cooker */
+    .food-form { display: flex; gap: 8px; margin: 12px 0; }
+    .food-form input { min-width: 0; flex: 1; padding: 10px; border: 1px solid #475569; border-radius: 6px; background: #0f172a; color: #fff; }
+    #foodMenu button { background: #334155; color: #fff; }
+    #foodMenu button.selected { background: #166534; }
+    .cooker-stage { height: 150px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; margin: 12px 0; border-radius: 6px; background: #0f172a; }
+    .burner { width: 132px; height: 132px; border: 8px solid #475569; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: border-color .5s, box-shadow .5s; }
+    .burner.on { border-color: #f97316; box-shadow: 0 0 24px #ef444488; }
+    .pan { width: 94px; height: 94px; border-radius: 50%; background: #64748b; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 5px #334155; }
+    .food-piece { width: 48px; height: 48px; border-radius: 50%; background: #eab308; transition: filter .8s, transform .8s; }
+    .cook-progress { height: 8px; border-radius: 4px; background: #334155; overflow: hidden; margin: 10px 0; }
+    .cook-progress > div { height: 100%; width: 0; background: #f97316; transition: width .1s linear; }
+    .cook-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    #cookStart { background: #059669; color: #fff; }
+    #cookStop { background: #dc2626; color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #cookStatus { min-height: 1.3em; margin: 8px 0 0; text-align: center; }
+
     /* Stove & Tables */
     .dot { width: 12px; height: 12px; border-radius: 50%; background: #64748b; display: inline-block; }
     .dot.on { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
@@ -55,6 +73,25 @@
     <button id="pour">HOLD</button>
   </div>
 
+  <!-- Food Cooker -->
+  <div class="panel">
+    <h2>Pretend Food Cooker</h2>
+    <form class="food-form" id="foodForm">
+      <input id="foodInput" type="text" maxlength="24" placeholder="Add a food..." aria-label="Food name" required>
+      <button type="submit">ADD</button>
+    </form>
+    <div class="grid-3" id="foodMenu" aria-label="Choose a food"></div>
+    <div class="cooker-stage" aria-label="Food cooking on a pan">
+      <div class="burner" id="cookBurner"><div class="pan"><div class="food-piece" id="foodPiece"></div></div></div>
+    </div>
+    <div class="cook-progress" aria-hidden="true"><div id="cookProgress"></div></div>
+    <div class="cook-actions">
+      <button id="cookStart" type="button" disabled>START</button>
+      <button id="cookStop" type="button" disabled>STOP</button>
+    </div>
+    <p id="cookStatus" role="status" aria-live="polite">Add a food to get started.</p>
+  </div>
+
   <!-- Stove System -->
   <div class="panel grid-2">
     <div>Stove Elements: <span class="dot" id="sLight"></span></div>
@@ -80,7 +117,7 @@
 
     // Menu Flavor Selection Logic
     document.querySelectorAll('#flavors button').forEach(b => b.onclick = () => {
-      document.querySelector('.selected').classList.remove('selected'); b.classList.add('selected');
+      document.querySelector('#flavors .selected').classList.remove('selected'); b.classList.add('selected');
       color = b.getAttribute('data-c');
     });
 
@@ -108,6 +145,82 @@
       let next = states[(states.indexOf(div.getAttribute('data-s')) + 1) % 3];
       div.setAttribute('data-s', next); div.textContent = next;
     }
+
+    // Food selection and cooking timer
+    const foodMenu = document.getElementById('foodMenu');
+    const foodForm = document.getElementById('foodForm');
+    const foodInput = document.getElementById('foodInput');
+    const cookStart = document.getElementById('cookStart');
+    const cookStop = document.getElementById('cookStop');
+    const cookBurner = document.getElementById('cookBurner');
+    const foodPiece = document.getElementById('foodPiece');
+    const cookProgress = document.getElementById('cookProgress');
+    const cookStatus = document.getElementById('cookStatus');
+    const foodColors = ['#eab308', '#fb923c', '#f87171', '#a3e635', '#c084fc', '#f9a8d4'];
+    let cookTimer, cookStartedAt, selectedFood;
+
+    function addFood(name) {
+      const food = name.trim();
+      if (!food) return;
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.textContent = food;
+      option.dataset.color = foodColors[foodMenu.children.length % foodColors.length];
+      option.onclick = () => {
+        if (cookTimer) return;
+        foodMenu.querySelector('.selected')?.classList.remove('selected');
+        option.classList.add('selected');
+        selectedFood = food;
+        foodPiece.style.backgroundColor = option.dataset.color;
+        foodPiece.style.filter = 'none';
+        cookStart.disabled = false;
+        cookStatus.textContent = food + ' is ready to cook.';
+      };
+      foodMenu.appendChild(option);
+    }
+
+    ['BURGER', 'PIZZA', 'EGG', 'TOAST'].forEach(addFood);
+    foodForm.addEventListener('submit', event => {
+      event.preventDefault();
+      addFood(foodInput.value);
+      foodInput.value = '';
+      foodInput.focus();
+    });
+
+    function updateCooking() {
+      const seconds = (performance.now() - cookStartedAt) / 1000;
+      const progress = Math.min(seconds / 30, 1);
+      cookProgress.style.width = (progress * 100) + '%';
+      foodPiece.style.filter = seconds < 20
+        ? `saturate(${0.8 + seconds / 50}) brightness(${0.85 + seconds / 120})`
+        : `saturate(1.2) brightness(${Math.max(0.48, 1 - (seconds - 20) / 45)}) sepia(${Math.min((seconds - 20) / 35, 0.65)})`;
+      cookStatus.textContent = `${selectedFood} cooking... ${seconds.toFixed(1)} seconds (perfect at 20–30)`;
+    }
+
+    cookStart.addEventListener('click', () => {
+      if (!selectedFood || cookTimer) return;
+      cookStartedAt = performance.now();
+      cookTimer = setInterval(updateCooking, 100);
+      cookBurner.classList.add('on');
+      cookStart.disabled = true;
+      cookStop.disabled = false;
+      updateCooking();
+    });
+
+    cookStop.addEventListener('click', () => {
+      if (!cookTimer) return;
+      const seconds = (performance.now() - cookStartedAt) / 1000;
+      clearInterval(cookTimer);
+      cookTimer = null;
+      cookBurner.classList.remove('on');
+      cookStart.disabled = false;
+      cookStop.disabled = true;
+      cookStatus.textContent = seconds < 20
+        ? `${selectedFood} stopped at ${seconds.toFixed(1)} seconds: a little undercooked!`
+        : seconds <= 30
+          ? `${selectedFood} stopped at ${seconds.toFixed(1)} seconds: perfect temperature!`
+          : `${selectedFood} stopped at ${seconds.toFixed(1)} seconds: a little overcooked!`;
+    });
   </script>
 </body>
 </html>
