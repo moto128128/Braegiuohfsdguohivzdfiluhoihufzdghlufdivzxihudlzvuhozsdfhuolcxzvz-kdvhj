@@ -31,6 +31,12 @@
     .food-form input { min-width: 0; flex: 1; padding: 10px; border: 1px solid #475569; border-radius: 6px; background: #0f172a; color: #fff; }
     #foodMenu button { background: #334155; color: #fff; }
     #foodMenu button.selected { background: #166534; }
+    #foodManager { margin: 10px 0; }
+    .food-edit-list { display: grid; gap: 6px; margin: 10px 0; }
+    .food-edit-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; background: #0f172a; padding: 8px; border-radius: 6px; }
+    .food-edit-row input { min-width: 0; padding: 8px; border: 1px solid #475569; border-radius: 6px; background: #1e2640; color: #fff; }
+    .food-edit-row .delete-food { background: #991b1b; color: #fff; }
+    #foodForm[hidden], #foodMenu[hidden], #foodEditor[hidden] { display: none; }
     .cooker-stage { height: 150px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; margin: 12px 0; border-radius: 6px; background: #0f172a; }
     .burner { width: 132px; height: 132px; border: 8px solid #475569; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: border-color .5s, box-shadow .5s; }
     .burner.on { border-color: #f97316; box-shadow: 0 0 24px #ef444488; }
@@ -76,11 +82,13 @@
   <!-- Food Cooker -->
   <div class="panel">
     <h2>Pretend Food Cooker</h2>
-    <form class="food-form" id="foodForm">
-      <input id="foodInput" type="text" maxlength="24" placeholder="Add a food..." aria-label="Food name" required>
-      <button type="submit">ADD</button>
-    </form>
+    <button id="foodManager" type="button">EDIT FOODS</button>
     <div class="grid-3" id="foodMenu" aria-label="Choose a food"></div>
+    <div id="foodEditor" class="food-edit-list" aria-label="Edit foods" hidden></div>
+    <form class="food-form" id="foodForm" hidden>
+      <input id="foodInput" type="text" maxlength="24" placeholder="Add a food..." aria-label="New food name" required>
+      <button type="submit">ADD FOOD</button>
+    </form>
     <div class="cooker-stage" aria-label="Food cooking on a pan">
       <div class="burner" id="cookBurner"><div class="pan"><div class="food-piece" id="foodPiece"></div></div></div>
     </div>
@@ -148,8 +156,10 @@
 
     // Food selection and cooking timer
     const foodMenu = document.getElementById('foodMenu');
+    const foodEditor = document.getElementById('foodEditor');
     const foodForm = document.getElementById('foodForm');
     const foodInput = document.getElementById('foodInput');
+    const foodManager = document.getElementById('foodManager');
     const cookStart = document.getElementById('cookStart');
     const cookStop = document.getElementById('cookStop');
     const cookBurner = document.getElementById('cookBurner');
@@ -157,29 +167,90 @@
     const cookProgress = document.getElementById('cookProgress');
     const cookStatus = document.getElementById('cookStatus');
     const foodColors = ['#eab308', '#fb923c', '#f87171', '#a3e635', '#c084fc', '#f9a8d4'];
-    let cookTimer, cookStartedAt, selectedFood;
+    const foods = [];
+    let cookTimer, cookStartedAt, selectedFood, editingFoods = false;
 
     function addFood(name) {
       const food = name.trim();
       if (!food) return;
-      const option = document.createElement('button');
-      option.type = 'button';
-      option.textContent = food;
-      option.dataset.color = foodColors[foodMenu.children.length % foodColors.length];
-      option.onclick = () => {
-        if (cookTimer) return;
-        foodMenu.querySelector('.selected')?.classList.remove('selected');
-        option.classList.add('selected');
-        selectedFood = food;
-        foodPiece.style.backgroundColor = option.dataset.color;
-        foodPiece.style.filter = 'none';
-        cookStart.disabled = false;
-        cookStatus.textContent = food + ' is ready to cook.';
-      };
-      foodMenu.appendChild(option);
+      foods.push({ name: food, color: foodColors[foods.length % foodColors.length] });
+      renderFoods();
+    }
+
+    function renderFoods() {
+      foodMenu.replaceChildren();
+      foodEditor.replaceChildren();
+      foods.forEach(food => {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.textContent = food.name;
+        option.classList.toggle('selected', selectedFood === food);
+        option.onclick = () => {
+          if (cookTimer || editingFoods) return;
+          selectedFood = food;
+          foodPiece.style.backgroundColor = food.color;
+          foodPiece.style.filter = 'none';
+          cookStart.disabled = false;
+          cookStatus.textContent = food.name + ' is ready to cook.';
+          renderFoods();
+        };
+        foodMenu.appendChild(option);
+
+        const row = document.createElement('div');
+        row.className = 'food-edit-row';
+        const name = document.createElement('span');
+        name.textContent = food.name;
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.textContent = 'EDIT';
+        edit.onclick = () => {
+          const input = document.createElement('input');
+          input.value = food.name;
+          input.maxLength = 24;
+          input.setAttribute('aria-label', 'Food name');
+          const save = document.createElement('button');
+          save.type = 'button';
+          save.textContent = 'SAVE';
+          save.onclick = () => {
+            const updatedName = input.value.trim();
+            if (!updatedName) {
+              input.focus();
+              return;
+            }
+            food.name = updatedName;
+            renderFoods();
+          };
+          row.replaceChildren(input, save, remove);
+          input.focus();
+        };
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'delete-food';
+        remove.textContent = 'DELETE';
+        remove.onclick = () => {
+          foods.splice(foods.indexOf(food), 1);
+          if (selectedFood === food) {
+            selectedFood = null;
+            cookStart.disabled = true;
+            foodPiece.style.filter = 'none';
+            cookStatus.textContent = 'Choose a food to get started.';
+          }
+          renderFoods();
+        };
+        row.append(name, edit, remove);
+        foodEditor.appendChild(row);
+      });
     }
 
     ['BURGER', 'PIZZA', 'EGG', 'TOAST'].forEach(addFood);
+    foodManager.addEventListener('click', () => {
+      editingFoods = !editingFoods;
+      foodMenu.hidden = editingFoods;
+      foodEditor.hidden = !editingFoods;
+      foodForm.hidden = !editingFoods;
+      foodManager.textContent = editingFoods ? 'DONE' : 'EDIT FOODS';
+      cookStart.disabled = editingFoods || !selectedFood;
+    });
     foodForm.addEventListener('submit', event => {
       event.preventDefault();
       addFood(foodInput.value);
@@ -204,6 +275,7 @@
       cookBurner.classList.add('on');
       cookStart.disabled = true;
       cookStop.disabled = false;
+      foodManager.disabled = true;
       updateCooking();
     });
 
@@ -215,6 +287,7 @@
       cookBurner.classList.remove('on');
       cookStart.disabled = false;
       cookStop.disabled = true;
+      foodManager.disabled = false;
       cookStatus.textContent = seconds < 20
         ? `${selectedFood} stopped at ${seconds.toFixed(1)} seconds: a little undercooked!`
         : seconds <= 30
