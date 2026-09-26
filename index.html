@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controller</title>
+  <style>
+    body { font-family: sans-serif; background: #121824; color: #fff; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+    .panel { background: #1e2640; border: 1px solid #334155; border-radius: 8px; padding: 15px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    button { padding: 10px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; }
+    
+    /* Pepsi Nozzles Colors */
+    [data-f="water"] { background: #3a7bd5; } [data-f="pepsi"] { background: #004b93; border-bottom: 3px solid #e32b22; color: #fff; }
+    [data-f="diet"] { background: #64748b; } [data-f="dew"] { background: #106b21; color: #cf0; }
+    [data-f="mug"] { background: #5c3a21; color: #f9a8d4; } [data-f="drp"] { background: #701a24; color: #fff; }
+    [data-f="starry"] { background: #0d5c3a; color: #facc15; } [data-f="crush"] { background: #ea580c; } [data-f="gat"] { background: #0284c7; }
+    .selected { outline: 2px solid #fff; }
+
+    /* Pour Area & Cup */
+    .stage { background: #0f172a; height: 120px; position: relative; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; margin: 10px 0; border-radius: 6px; }
+    .stream { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 6px; height: 0; transition: height 0.1s; }
+    .stream.active { height: 75px; }
+    .cup-box { width: 50px; height: 70px; border: 2px solid #aaa; border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; transition: transform 0.5s ease-in; position: relative; margin-bottom: 5px; }
+    .liquid { position: absolute; bottom: 0; width: 100%; height: 0; transition: height 0.1s linear; }
+    .slide { transform: translateX(300px); }
+    #pour { background: #ef4444; color: #fff; width: 80px; height: 80px; border-radius: 50%; margin: auto; display: block; }
+
+    /* Stove & Tables */
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: #64748b; display: inline-block; }
+    .dot.on { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+    .t-card { background: #2a3558; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; }
+    [data-s="READY"] { color: #34d399; } [data-s="OCCUPIED"] { color: #f87171; } [data-s="DIRTY"] { color: #fbbf24; }
+  </style>
+</head>
+<body>
+
+  <!-- Beverage Station -->
+  <div class="panel">
+    <div class="grid-3" id="flavors">
+      <button class="selected" data-f="water" data-c="#cbd5e1">WATER</button>
+      <button data-f="pepsi" data-c="#004b93">PEPSI</button>
+      <button data-f="diet" data-c="#94a3b8">DIET PEPSI</button>
+      <button data-f="dew" data-c="#a3e635">MTN DEW</button>
+      <button data-f="mug" data-c="#78350f">MUG</button>
+      <button data-f="drp" data-c="#4c0519">DR PEPPER</button>
+      <button data-f="starry" data-c="#eab308">STARRY</button>
+      <button data-f="crush" data-c="#f97316">CRUSH</button>
+      <button data-f="gat" data-c="#38bdf8">GATORADE</button>
+    </div>
+    <div class="stage">
+      <div class="stream" id="str"></div>
+      <div class="cup-box" id="cup"><div class="liquid" id="liq"></div></div>
+    </div>
+    <button id="pour">HOLD</button>
+  </div>
+
+  <!-- Stove System -->
+  <div class="panel grid-2">
+    <div>Stove Elements: <span class="dot" id="sLight"></span></div>
+    <div class="grid-2">
+      <button style="background:#059669;color:#fff" onclick="document.getElementById('sLight').classList.add('on')">ON</button>
+      <button style="background:#dc2626;color:#fff" onclick="document.getElementById('sLight').classList.remove('on')">OFF</button>
+    </div>
+  </div>
+
+  <!-- Six Tables Seating Layout -->
+  <div class="panel grid-3">
+    <div class="t-card" onclick="toggleT(this)">T1 <div data-s="READY">READY</div></div>
+    <div class="t-card" onclick="toggleT(this)">T2 <div data-s="OCCUPIED">OCCUPIED</div></div>
+    <div class="t-card" onclick="toggleT(this)">T3 <div data-s="READY">READY</div></div>
+    <div class="t-card" onclick="toggleT(this)">T4 <div data-s="DIRTY">DIRTY</div></div>
+    <div class="t-card" onclick="toggleT(this)">T5 <div data-s="READY">READY</div></div>
+    <div class="t-card" onclick="toggleT(this)">T6 <div data-s="READY">READY</div></div>
+  </div>
+
+  <script>
+    let color = '#cbd5e1', h = 0, timer;
+    const cup = document.getElementById('cup'), liq = document.getElementById('liq'), str = document.getElementById('str'), btn = document.getElementById('pour');
+
+    // Menu Flavor Selection Logic
+    document.querySelectorAll('#flavors button').forEach(b => b.onclick = () => {
+      document.querySelector('.selected').classList.remove('selected'); b.classList.add('selected');
+      color = b.getAttribute('data-c');
+    });
+
+    // Unified Input Pour Event Bindings (Mouse + Mobile Touchscreen compatible)
+    ['mousedown', 'touchstart'].forEach(e => btn.addEventListener(e, (evt) => {
+      evt.preventDefault(); if(cup.classList.contains('slide')) return;
+      str.style.background = liq.style.background = color; str.classList.add('active');
+      timer = setInterval(() => { if(h < 85) { h += 3; liq.style.height = h + '%'; } }, 30);
+    }));
+
+    ['mouseup', 'mouseleave', 'touchend'].forEach(e => btn.addEventListener(e, () => {
+      clearInterval(timer); str.classList.remove('active');
+      if (h > 5) {
+        setTimeout(() => { cup.classList.add('slide'); 
+          setTimeout(() => { cup.style.opacity = '0'; cup.classList.remove('slide'); h = 0; liq.style.height = '0%'; 
+            setTimeout(() => { cup.style.opacity = '1'; }, 100);
+          }, 500);
+        }, 150);
+      }
+    }));
+
+    // Table Cycle Rotator Engine
+    function toggleT(el) {
+      const div = el.querySelector('div'), states = ['READY', 'OCCUPIED', 'DIRTY'];
+      let next = states[(states.indexOf(div.getAttribute('data-s')) + 1) % 3];
+      div.setAttribute('data-s', next); div.textContent = next;
+    }
+  </script>
+</body>
+</html>
